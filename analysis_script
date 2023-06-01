@@ -1,3 +1,5 @@
+## Note: GIV_data file contains all trials of Giving Task for each participant in long format
+
 ## recode variables
 ```{r}
 
