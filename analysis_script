@@ -1,0 +1,109 @@
+## recode variables
+```{r}
+
+# recode Response as 0 = rejected or missed, 1 = accepted
+GIV_data_recode <-
+  GIV_data %>%
+  mutate(Decision = case_when(Response == 2 ~ 0,
+                              Response == 1 ~ 1,
+                              is.na(Response) ~ 0)) %>%
+  mutate(age_centered = Age - mean(Age,na.rm=T)) %>%
+  mutate(target_OthervFamFri = case_when(Target == "other" ~ -.666,
+                                           Target == "family" ~ .333,
+                                           Target == "friend" ~ .333)) %>%
+  mutate(target_FamvFri = case_when(Target == "other" ~ 0,
+                                    Target == "family" ~ .5,
+                                    Target == "friend" ~ -.5))
+
+# Costly Donation Difference Values: 1, 1.25, 1.50, 1.75, 2, 2.25, 2.50, 2.75, 3, 3.25, 3.50, 3.75, 4, 4.5, 4.75, 5
+# mean CD difference values = 2.5
+
+# mean center difference value for CD trials
+GIV_data_CDtrials <- GIV_data_recode %>%
+  filter(TrialType == "CostlyDonation") %>%
+  mutate(CD_difference_centered = Difference - 2.7)
+
+```
+
+## logistic regression - decision
+
+```{r}
+CD_diffxtargetxage <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered + target_OthervFamFri*age_centered + CD_difference_centered*target_OthervFamFri*age_centered + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered + CD_difference_centered*target_FamvFri*age_centered + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage)
+exp(fixef(CD_diffxtargetxage))
+tab_model(CD_diffxtargetxage)
+
+# center age variables at different ages
+GIV_data_CDtrials$age_minus1SD <- GIV_data_CDtrials$age_centered + (sd(GIV_data_CDtrials$age_centered,na.rm=T))
+print(sd(GIV_data_CDtrials$age_centered,na.rm=T)) # SD = 3.32
+GIV_data_CDtrials$age_plus1SD <- GIV_data_CDtrials$age_centered - (sd(GIV_data_CDtrials$age_centered,na.rm=T))
+
+# run glm at older age
+CD_diffxtargetxage_older <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_plus1SD + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_plus1SD + target_OthervFamFri*age_plus1SD + CD_difference_centered*target_OthervFamFri*age_plus1SD + CD_difference_centered*target_FamvFri + target_FamvFri*age_plus1SD + CD_difference_centered*target_FamvFri*age_plus1SD +(1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage_older)
+
+
+# run glm at younger age
+CD_diffxtargetxage_younger <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_minus1SD + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_minus1SD + target_OthervFamFri*age_minus1SD + CD_difference_centered*target_OthervFamFri*age_minus1SD + CD_difference_centered*target_FamvFri + target_FamvFri*age_minus1SD + CD_difference_centered*target_FamvFri*age_minus1SD +(1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage_younger)
+
+```
+
+##regression - reaction time
+
+```{r}
+# create accept variable for RT so that all variables refer to accepted trials
+GIV_data_CDtrials_recode <-
+  GIV_data_CDtrials %>%
+  mutate(Accept = case_when(Decision == 1 ~ 0,
+                            Decision == 0 ~ 1))
+
+RT_CD_diffxtargetxage <- lmer(RT ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered + target_OthervFamFri*age_centered + CD_difference_centered*target_OthervFamFri*age_centered + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered + CD_difference_centered*target_FamvFri*age_centered + Accept*CD_difference_centered*target_OthervFamFri*age_centered + Accept*CD_difference_centered*target_FamvFri*age_centered + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials_recode)
+summary(RT_CD_diffxtargetxage)
+exp(fixef(RT_CD_diffxtargetxage))
+confint(RT_CD_diffxtargetxage, level=0.95)
+
+# RT to reject
+RT_CD_diffxtargetxage_rejected <- lmer(RT ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered + target_OthervFamFri*age_centered + CD_difference_centered*target_OthervFamFri*age_centered + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered + CD_difference_centered*target_FamvFri*age_centered + Decision*CD_difference_centered*target_OthervFamFri*age_centered + Decision*CD_difference_centered*target_FamvFri*age_centered + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials_recode)
+summary(RT_CD_diffxtargetxage_rejected)
+exp(fixef(RT_CD_diffxtargetxage_rejected))
+confint(RT_CD_diffxtargetxage_rejected, level=0.95)
+
+```
+
+## logistic regression with PPI - decision
+```{r}
+GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_IFG_R_centered <- GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_IFG_R - mean(GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_IFG_R, na.rm=T)
+
+GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R_centered <- GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R - mean(GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R, na.rm=T)
+
+CD_diffxtargetxage_IFG <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered.x + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered.x + target_OthervFamFri*age_centered.x + CD_difference_centered*target_OthervFamFri*age_centered.x + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered.x + CD_difference_centered*target_FamvFri*age_centered.x + CD_difference_centered*target_OthervFamFri*ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_IFG_R_centered + CD_difference_centered*target_FamvFri*ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_IFG_R_centered + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials_PPI, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage_IFG)
+exp(fixef(CD_diffxtargetxage_IFG))
+
+CD_diffxtargetxage_OFC <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered.x + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered.x + target_OthervFamFri*age_centered.x + CD_difference_centered*target_OthervFamFri*age_centered.x + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered.x + CD_difference_centered*target_FamvFri*age_centered.x + CD_difference_centered*target_OthervFamFri*ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R_centered + CD_difference_centered*target_FamvFri*ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R_centered + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials_PPI, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage_OFC)
+exp(fixef(CD_diffxtargetxage_OFC))
+
+
+```
+
+# test simple slopes of NAcc-OFC - decision
+```{r}
+# center FamFr v Other variable at different levels of NAcc-OFC
+GIV_data_CDtrials_PPI$PPI_Positive_FamFriendvOther_OFC_R_minus1SD <- GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R + (sd(GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R,na.rm=T))
+print(sd(GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R,na.rm=T)) # SD = 47.46
+
+GIV_data_CDtrials_PPI$PPI_Positive_FamFriendvOther_OFC_R_plus1SD <- GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R - (sd(GIV_data_CDtrials_PPI$ageQuad_PPIPositive_FamFriendvOther_ageLin_Z31_OFC_R,na.rm=T))
+
+# plus 1SD NAcc-OFC
+CD_diffxtargetxage_OFC_plus1SD <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered.x + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered.x + target_OthervFamFri*age_centered.x + CD_difference_centered*target_OthervFamFri*age_centered.x + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered.x + CD_difference_centered*target_FamvFri*age_centered.x + CD_difference_centered*target_OthervFamFri*PPI_Positive_FamFriendvOther_OFC_R_plus1SD + CD_difference_centered*target_FamvFri*PPI_Positive_FamFriendvOther_OFC_R_plus1SD + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials_PPI, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage_OFC_plus1SD)
+exp(fixef(CD_diffxtargetxage_OFC_plus1SD))
+
+# minus 1 SD NAcc-OFC
+CD_diffxtargetxage_OFC_minus1SD <- glmer(Decision ~ CD_difference_centered + target_OthervFamFri + target_FamvFri + age_centered.x + CD_difference_centered*target_OthervFamFri + CD_difference_centered*age_centered.x + target_OthervFamFri*age_centered.x + CD_difference_centered*target_OthervFamFri*age_centered.x + CD_difference_centered*target_FamvFri + target_FamvFri*age_centered.x + CD_difference_centered*target_FamvFri*age_centered.x + CD_difference_centered*target_OthervFamFri*PPI_Positive_FamFriendvOther_OFC_R_minus1SD + CD_difference_centered*target_FamvFri*PPI_Positive_FamFriendvOther_OFC_R_minus1SD + (1 + CD_difference_centered + target_OthervFamFri + target_FamvFri + CD_difference_centered*target_OthervFamFri + CD_difference_centered*target_FamvFri || subID), data = GIV_data_CDtrials_PPI, family = "binomial", control = glmerControl(optimizer = "bobyqa"))
+summary(CD_diffxtargetxage_OFC_minus1SD)
+exp(fixef(CD_diffxtargetxage_OFC_minus1SD))
+
+```
